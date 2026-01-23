@@ -1,0 +1,90 @@
+version: '3.8'
+services:
+  auth:
+    container_name: cinehex-auth-server
+    image: ghcr.io/luisernesto1234/ms-cinehex-auth-server:latest
+    restart: always
+    env_file: .env
+    environment:
+      - SERVER_FORWARD_HEADERS_STRATEGY=framework
+    depends_on:
+      - rabbitmq # Esperamos a que Rabbit arranque
+    networks:
+      - cinehex-red
+
+  resource:
+    container_name: cinehex-resource
+    image: ghcr.io/luisernesto1234/ms-cinehex-resource:latest
+    restart: always
+    env_file: .env
+    depends_on:
+      - rabbitmq
+    networks:
+      - cinehex-red
+    environment:
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://${AUTH_HOST:-172.200.176.197}:${SERVER_GATEWAY_PORT:-8090}
+      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://cinehex-auth-server:9000/oauth2/jwks
+
+  gateway:
+    container_name: cinehex-gateway
+    image: ghcr.io/luisernesto1234/cinehex-gateway:latest
+    ports:
+      - "${SERVER_GATEWAY_PORT}:${SERVER_GATEWAY_PORT}"
+    depends_on:
+      - auth
+      - resource
+    networks:
+      - cinehex-red
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: cinehex-rabbit
+    restart: always
+    ports:
+      - "${RABBITMQ_PORT}:${RABBITMQ_PORT}"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - cinehex-red
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: cinehex-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - cinehex-red
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  cinehex-red:
+    name: cinehex-red
+    driver: bridge
+
+volumes:
+  rabbitmq_data:
+  pgdata:
+
+
+
+
+
+
+
