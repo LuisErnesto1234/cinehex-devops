@@ -1,55 +1,5 @@
 version: '3.8'
 services:
-  auth:
-    container_name: cinehex-auth-server
-    image: ghcr.io/luisernesto1234/ms-cinehex-auth-server:latest
-    restart: always
-    env_file: .env
-    environment:
-      - SERVER_FORWARD_HEADERS_STRATEGY=framework
-    depends_on:
-      - rabbitmq # Esperamos a que Rabbit arranque
-    networks:
-      - cinehex-red
-
-  resource:
-    container_name: cinehex-resource
-    image: ghcr.io/luisernesto1234/ms-cinehex-resource:latest
-    restart: always
-    env_file: .env
-    depends_on:
-      - rabbitmq
-    networks:
-      - cinehex-red
-    environment:
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://${AUTH_HOST:-172.200.176.197}:${SERVER_GATEWAY_PORT:-8090}
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://cinehex-auth-server:9000/oauth2/jwks
-
-  gateway:
-    container_name: cinehex-gateway
-    image: ghcr.io/luisernesto1234/cinehex-gateway:latest
-    ports:
-      - "${SERVER_GATEWAY_PORT}:${SERVER_GATEWAY_PORT}"
-    depends_on:
-      - auth
-      - resource
-    networks:
-      - cinehex-red
-
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: cinehex-rabbit
-    restart: always
-    ports:
-      - "${RABBITMQ_PORT}:${RABBITMQ_PORT}"
-      - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBIT_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASS}
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - cinehex-red
 
   postgres:
     image: postgres:15-alpine
@@ -72,20 +22,30 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis-server:
-    image: redis:8.4.0-alpine3.22 # Asegúrate de usar el tag exacto disponible
+    image: redis:7.4-alpine # Versión estable y ligera
     container_name: redis-test
     ports:
-      - 6379:6379
+      - "6379:6379"
     networks:
       - cinehex-red
-    # Configuración de usuario y contraseña vía comandos de inicio
+    # Esto configura al usuario 'default' con la contraseña y crea tu usuario extra
     command: >
       redis-server 
       --requirepass ${REDIS_PASSWORD}
       --user ${REDIS_USERNAME} on >${REDIS_PASSWORD} ~* +@all
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     
 networks:
   cinehex-red:
@@ -93,12 +53,4 @@ networks:
     driver: bridge
 
 volumes:
-  rabbitmq_data:
   pgdata:
-
-
-
-
-
-
-
